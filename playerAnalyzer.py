@@ -1,32 +1,14 @@
 import streamlit as st
-import pandas as pd
 from statistics import mean
 
-# ------------------------
-# PAGE TITLE
-# ------------------------
-
-st.set_page_config(page_title="Player Analyzer", layout="wide")
-
-st.title("🏀 Player Performance & Salary Value Analyzer")
-
-st.write("""
-Analyze if a player is undervalued, fairly paid, or overpaid
-based on performance and salary.
-""")
-
-# ------------------------
-# SESSION STORAGE
-# ------------------------
+# This app helps check if a player is overpaid or underpaid
+# Based on their stats and salary
 
 if "players" not in st.session_state:
     st.session_state.players = []
 
 players = st.session_state.players
 
-# ------------------------
-# FUNCTIONS
-# ------------------------
 
 def calculate_performance_score(points, assists, rebounds, steals, blocks):
     return (
@@ -37,32 +19,72 @@ def calculate_performance_score(points, assists, rebounds, steals, blocks):
         + blocks * 1.5
     )
 
-def calculate_value_score(performance_score, salary):
-    return performance_score / salary
+
+def calculate_value_score(performance_score, salary_millions):
+    if salary_millions <= 0:
+        st.error("Salary must be greater than 0.")
+        return 0
+    return performance_score / salary_millions
+
 
 def classify_player(value_score):
     if value_score >= 18:
         return "Undervalued"
-    elif value_score >= 12:
+    if value_score >= 12:
         return "Fair Value"
-    else:
-        return "Overpaid"
+    return "Overpaid"
+
 
 def build_recommendation(classification):
     if classification == "Undervalued":
         return "Strong value for the salary. This player may be worth keeping or targeting."
-
-    elif classification == "Fair Value":
+    if classification == "Fair Value":
         return "Reasonable contract value based on performance."
+    return "Performance appears low compared to salary. Review contract value carefully."
 
-    else:
-        return "Performance appears low compared to salary. Review contract value carefully."
+
+def update_summary():
+    if not players:
+        st.write("Total Players Analyzed: 0")
+        st.write("Average Value Score: 0.00")
+        st.write("Best Value Player: None")
+        st.write("Lowest Value Player: None")
+        return
+
+    total_players = len(players)
+    average_value = mean(player["value_score"] for player in players)
+    best_player = max(players, key=lambda player: player["value_score"])
+    worst_player = min(players, key=lambda player: player["value_score"])
+
+    st.write(f"Total Players Analyzed: {total_players}")
+    st.write(f"Average Value Score: {average_value:.2f}")
+    st.write(
+        f"Best Value Player: {best_player['name']} "
+        f"({best_player['classification']}, {best_player['value_score']:.2f})"
+    )
+    st.write(
+        f"Lowest Value Player: {worst_player['name']} "
+        f"({worst_player['classification']}, {worst_player['value_score']:.2f})"
+    )
+
+
+# ------------------------
+# STREAMLIT APP SETUP
+# ------------------------
+
+st.set_page_config(page_title="Player Analyzer", layout="wide")
+
+st.title("Player Performance & Salary Value Analyzer")
+
+st.write(
+    "Analyze if a player is undervalued, fairly paid, or overpaid based on performance and salary."
+)
 
 # ------------------------
 # INPUT SECTION
 # ------------------------
 
-st.header("Player Inputs")
+st.subheader("Player Inputs")
 
 col1, col2 = st.columns(2)
 
@@ -79,84 +101,90 @@ with col2:
     salary = st.number_input("Salary (Millions)", min_value=0.1)
 
 # ------------------------
-# ANALYZE BUTTON
+# BUTTON SECTION
 # ------------------------
 
-if st.button("Analyze Player"):
+analyze_button = st.button("Analyze Player")
+clear_all_button = st.button("Clear All Players")
 
-    performance_score = calculate_performance_score(
-        points,
-        assists,
-        rebounds,
-        steals,
-        blocks
-    )
+# ------------------------
+# RESULT SECTION
+# ------------------------
 
-    value_score = calculate_value_score(performance_score, salary)
+if analyze_button:
+    if not name:
+        st.error("Please enter the player name.")
+    elif not team:
+        st.error("Please enter the team name.")
+    else:
+        performance_score = calculate_performance_score(
+            points, assists, rebounds, steals, blocks
+        )
 
-    classification = classify_player(value_score)
+        value_score = calculate_value_score(performance_score, salary)
 
-    recommendation = build_recommendation(classification)
+        classification = classify_player(value_score)
 
-    player_record = {
-        "Player": name,
-        "Team": team,
-        "Performance Score": round(performance_score, 2),
-        "Salary": round(salary, 2),
-        "Value Score": round(value_score, 2),
-        "Classification": classification
-    }
+        recommendation = build_recommendation(classification)
 
-    players.append(player_record)
+        player_record = {
+            "name": name,
+            "team": team,
+            "points": points,
+            "assists": assists,
+            "rebounds": rebounds,
+            "steals": steals,
+            "blocks": blocks,
+            "salary": salary,
+            "performance_score": performance_score,
+            "value_score": value_score,
+            "classification": classification,
+        }
 
-    # ------------------------
-    # RESULTS
-    # ------------------------
+        players.append(player_record)
 
-    st.success("Player analyzed successfully!")
-
-    st.subheader("Player Analysis Result")
-
-    st.write(f"### {name} - {team}")
-    st.write(f"Performance Score: {performance_score:.2f}")
-    st.write(f"Value Score: {value_score:.2f}")
-    st.write(f"Classification: **{classification}**")
-    st.write(f"Recommendation: {recommendation}")
+        st.subheader("Player Analysis Result")
+        st.write(f"Player: {name}")
+        st.write(f"Team: {team}")
+        st.write(f"Performance Score: {performance_score:.2f}")
+        st.write(f"Value Score: {value_score:.2f}")
+        st.write(f"Classification: {classification}")
+        st.write(f"Recommendation: {recommendation}")
 
 # ------------------------
 # SUMMARY SECTION
 # ------------------------
 
+st.subheader("Team / Session Summary")
+update_summary()
+
+# ------------------------
+# TABLE SECTION
+# ------------------------
+
+st.subheader("Saved Player Results")
+
 if players:
-
-    st.header("Team / Session Summary")
-
-    average_value = mean(player["Value Score"] for player in players)
-
-    best_player = max(players, key=lambda x: x["Value Score"])
-    worst_player = min(players, key=lambda x: x["Value Score"])
-
-    col1, col2, col3, col4 = st.columns(4)
-
-    col1.metric("Players Analyzed", len(players))
-    col2.metric("Average Value Score", f"{average_value:.2f}")
-    col3.metric("Best Value Player", best_player["Player"])
-    col4.metric("Lowest Value Player", worst_player["Player"])
-
-    # ------------------------
-    # TABLE
-    # ------------------------
-
-    st.header("Saved Player Results")
-
-    df = pd.DataFrame(players)
-
-    st.dataframe(df, use_container_width=True)
+    st.table(
+        [
+            {
+                "Player": player["name"],
+                "Team": player["team"],
+                "Performance": f"{player['performance_score']:.2f}",
+                "Salary": f"{player['salary']:.2f}",
+                "Value Score": f"{player['value_score']:.2f}",
+                "Classification": player["classification"],
+            }
+            for player in players
+        ]
+    )
+else:
+    st.write("No saved players yet.")
 
 # ------------------------
-# CLEAR BUTTON
+# CLEAR ALL PLAYERS
 # ------------------------
 
-if st.button("Clear All Players"):
+if clear_all_button:
     st.session_state.players = []
     st.rerun()
